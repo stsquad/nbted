@@ -1,4 +1,5 @@
 use crate::Result;
+use byteorder::{ByteOrder, LittleEndian};
 
 /// Represents a single NBT tag
 #[derive(Clone, PartialEq, Debug)]
@@ -86,6 +87,7 @@ pub enum Compression {
     None,
     Gzip,
     Zlib,
+    Bedrock,
 }
 impl Compression {
     /// Returns the type of compression as an English string
@@ -94,6 +96,7 @@ impl Compression {
             Compression::None => "None",
             Compression::Gzip => "Gzip",
             Compression::Zlib => "Zlib",
+            Compression::Bedrock => "Uncompressed Bedrock",
         }
     }
     /// Given the name of a type of compression, return the corresponding
@@ -119,6 +122,18 @@ impl Compression {
             0x1f => Some(Compression::Gzip),
             0x78 => Some(Compression::Zlib),
             _ => None,
+        }
+    }
+    /// Given the first 8 bytes from an NBT file check if it is a
+    /// Bedrock file and return the appropriate Some(Compresssion)
+    /// result if it is.
+    /// TODO: we could further validate by checking the file size
+    pub fn from_bedrock_header(header: [u8; 8]) -> Option<Self> {
+        let version = LittleEndian::read_u32(&header[0..4]);
+        let _size = LittleEndian::read_u32(&header[4..9]);
+        match version {
+            8 => Some(Compression::Bedrock),
+            _ => None
         }
     }
 }

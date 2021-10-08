@@ -32,6 +32,9 @@ pub fn write_file<W: Write>(w: &mut W, file: &NBTFile) -> Result<()> {
             write_compound(&mut w, map, false)?;
             let _: &mut W = w.finish()?;
         }
+        Compression::Bedrock => {
+            bail!("Not yet implemented");
+        }
     }
 
     Ok(())

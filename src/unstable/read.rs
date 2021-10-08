@@ -1,30 +1,49 @@
 use crate::data::{Compression, NBTFile, NBT};
 use crate::Result;
 
+use std::convert::TryInto;
 use std::io::{self, BufRead, Read};
 
 use byteorder::{BigEndian, ReadBytesExt};
 
 use flate2::read::{GzDecoder, ZlibDecoder};
 
+
 /// Read an NBT file from the given reader
 pub fn read_file<R: BufRead>(mut reader: &mut R) -> Result<NBTFile> {
     /* Peek into the first byte of the reader, which is used to determine the
      * compression */
-    let peek = match reader.fill_buf()? {
-        x if !x.is_empty() => x[0],
-        _ => bail!("Error peaking first byte in read::read_file, file was EOF"),
-    };
+    let start_of_file = reader.fill_buf()?;
+    let header: [u8; 8];
+    let peek;
+
+    if start_of_file.len() >= 8 {
+        header = start_of_file.try_into()?;
+        peek = start_of_file[0];
+    } else {
+        bail!("Error reading first bytes in file: {:?}", start_of_file);
+    }
 
     let compression = match Compression::from_first_byte(peek) {
         Some(x) => x,
-        None => bail!("Unknown compression format where first byte is {}", peek),
+        None => {
+            match Compression::from_bedrock_header(header) {
+                Some(x) => {
+                    reader.consume(8);
+                    x
+                },
+                None => {
+                    bail!("Unknown bedrock format where header is {:?}", header);
+                }
+            }
+        }
     };
 
     let root = match compression {
         Compression::None => read_compound(&mut reader)?,
         Compression::Gzip => read_compound(&mut GzDecoder::new(reader))?,
         Compression::Zlib => read_compound(&mut ZlibDecoder::new(reader))?,
+        _ => bail!("Un-handled reader"),
     };
 
     Ok(NBTFile { root, compression })
